@@ -60,6 +60,7 @@ If you currently have the WPMU Ldap Authentication plugin configured, migration 
 * FIXED: Ensure LDAP add-user admin helpers load supporting functions even when LDAP authentication is disabled.
 * SECURITY: Harden option handling with nonce checks and output escaping to mitigate CSRF and stored XSS in admin pages.
 * SECURITY: Escape LDAP inputs and rely on trusted headers for SSO logins to reduce injection and impersonation risks.
+* FIXED: Replace deprecated WordPress helpers and validate sanitized LDAP usernames and emails during account creation.
 
 **5.0.1**
 
