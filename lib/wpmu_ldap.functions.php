@@ -27,20 +27,27 @@ function wpmuLdapCreateWPUserFromLdap($opts) {
 	$ldapUserData = $args['ldapUserData'];
 	$createBlog = (bool) $args['createBlog'];
 
-	// Sanitize username
-	$newUserName = trim($newUserName);
+        // Sanitize username
+        $newUserName = trim($newUserName);
+        $sanitized_user_login = sanitize_user( $newUserName, true );
 
-	// Check to see if email is empty
-	if ( empty($ldapUserData[LDAP_INDEX_EMAIL]) )
-		return new WP_Error('ldapcreate_emailempty', sprintf(__('<strong>ERROR</strong>: <strong>%s</strong> does not have an email address associated with the ldap record.  All wordpress accounts must have a unique email address.'),$newUserName));
+        if ( empty( $sanitized_user_login ) ) {
+                return new WP_Error('ldapcreate_invalid_username', __('<strong>ERROR</strong>: Unable to create account because the username contains invalid characters.'));
+        }
 
-	// Check to see if email already exists
-        if ( email_exists($ldapUserData[LDAP_INDEX_EMAIL]) )
-		return new WP_Error('ldapcreate_emailconflict', sprintf(__('<strong>ERROR</strong>: <strong>%s</strong> (%s) is already associated with another account.  All accounts (including the admin account) must have an unique email address.'),$ldapUserData[LDAP_INDEX_EMAIL],$newUserName));
+        $sanitized_email = sanitize_email( $ldapUserData[LDAP_INDEX_EMAIL] );
+
+        // Check to see if email is empty
+        if ( empty( $sanitized_email ) )
+                return new WP_Error('ldapcreate_emailempty', sprintf(__('<strong>ERROR</strong>: <strong>%s</strong> does not have an email address associated with the ldap record.  All wordpress accounts must have a unique email address.'), $newUserName));
+
+        // Check to see if email already exists
+        if ( email_exists( $sanitized_email ) )
+                return new WP_Error('ldapcreate_emailconflict', sprintf(__('<strong>ERROR</strong>: <strong>%s</strong> (%s) is already associated with another account.  All accounts (including the admin account) must have an unique email address.'), $sanitized_email, $newUserName));
 
 	// we don't actually care about the WP password (since it's LDAP), but we need one for WP database
         $sPassword = wp_generate_password();
-	$user_id = wpmu_create_user( $newUserName, $sPassword, $ldapUserData[LDAP_INDEX_EMAIL] );
+        $user_id = wpmu_create_user( $sanitized_user_login, $sPassword, $sanitized_email );
 
 	if ( $user_id === false ) {
 		return new WP_Error('ldapcreate_failed', __('<strong>ERROR</strong>: Account creation from LDAP failed.'));
@@ -69,7 +76,7 @@ function wpmuLdapCreateWPUserFromLdap($opts) {
 	//This is for plugin events
 	do_action('wpmu_activate_user', $user_id, $newUserPassword, false);
 
-        $domain = strtolower( sanitize_user( $newUserName, true ) );
+        $domain = strtolower( $sanitized_user_login );
         if ( is_subdomain_install() ) {
 		$newdomain = $domain . "." . $current_site->domain;
 		$path = $base;
