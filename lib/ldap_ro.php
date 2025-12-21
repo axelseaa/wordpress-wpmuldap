@@ -22,11 +22,11 @@
  require_once("defines.php");
  
 class LDAP_ro extends LDAP {
-	function Authenticate ($in_username, $in_passwd, &$user_data) {
-		// First, connect to the LDAP server
-		if(!$this->Dock()) {
-			return LDAP_ERROR_CONNECTION;
-		}
+    function Authenticate ($in_username, $in_passwd, &$user_data) {
+                // First, connect to the LDAP server
+                if(!$this->Dock()) {
+                        return LDAP_ERROR_CONNECTION;
+                }
 		// Set up the search stuff
 		$attributes_to_get = array (get_site_option('ldapAttributeMail',LDAP_DEFAULT_ATTRIBUTE_MAIL),
 					    get_site_option('ldapAttributeGivenname',LDAP_DEFAULT_ATTRIBUTE_GIVENNAME),
@@ -38,8 +38,9 @@ class LDAP_ro extends LDAP {
 		else
 			$uid = get_site_option('ldapAttributeWinSearch',LDAP_DEFAULT_ATTRIBUTE_WINSEARCH); //Windows
 
-		$this->SetSearchCriteria ("($uid=$in_username)", $attributes_to_get);
-		$this->Search();
+                $safe_username = $this->escapeFilterValue($in_username);
+                $this->SetSearchCriteria ("($uid=$safe_username)", $attributes_to_get);
+                $this->Search();
 		
 		// Did we find the user?
 		if ($this->info[0]["dn"] == "") {
@@ -91,9 +92,9 @@ class LDAP_ro extends LDAP {
 	}
 	
 	
-	function GetUserInfo ($in_username, &$user_data) {
-		// First, connect to the LDAP server
-		$this->Dock();
+    function GetUserInfo ($in_username, &$user_data) {
+                // First, connect to the LDAP server
+                $this->Dock();
 		
 		$attributes_to_get = array (get_site_option('ldapAttributeMail',LDAP_DEFAULT_ATTRIBUTE_MAIL),
 					    get_site_option('ldapAttributeGivenname',LDAP_DEFAULT_ATTRIBUTE_GIVENNAME),
@@ -104,8 +105,9 @@ class LDAP_ro extends LDAP {
 					    get_site_option('ldapAttributeMacaddress',LDAP_DEFAULT_ATTRIBUTE_MACADDRESS),
 					    "dn");
 
-		$this->SetSearchCriteria ("(cn=$in_username)", $attributes_to_get);
-		$this->Search();
+                $safe_username = $this->escapeFilterValue($in_username);
+                $this->SetSearchCriteria ("(cn=$safe_username)", $attributes_to_get);
+                $this->Search();
 		
 		// Did we find the user?
 		if ($this->info[0]["dn"] == "") {
@@ -140,15 +142,16 @@ class LDAP_ro extends LDAP {
 		return LDAP_OK;
 	}
 
-	function DoSearchUsername ($in_username, $attributes_to_get, &$data) {
-		$this->Dock();
-                if (get_site_option('ldapLinuxWindows')) 
+    function DoSearchUsername ($in_username, $attributes_to_get, &$data) {
+                $this->Dock();
+                if (get_site_option('ldapLinuxWindows'))
                         $uid = get_site_option('ldapAttributeNixSearch',LDAP_DEFAULT_ATTRIBUTE_NIXSEARCH); //Linux
                 else
                         $uid = get_site_option('ldapAttributeWinSearch',LDAP_DEFAULT_ATTRIBUTE_WINSEARCH); //Windows
 
-                $this->SetSearchCriteria ("($uid=$in_username)", $attributes_to_get);
-		$this->Search();
+                $safe_username = $this->escapeFilterValue($in_username);
+                $this->SetSearchCriteria ("($uid=$safe_username)", $attributes_to_get);
+                $this->Search();
 		$this->Disconnect();
 		if ($this->info['count'] > 0) {
                         $data[LDAP_INDEX_DN] = $this->info[0]["dn"];
@@ -204,11 +207,31 @@ class LDAP_ro extends LDAP {
 	}
 
 	// Test connection
-	function testConnect () {
-		return $this->Dock();
-		if (!$this->Dock())
-			return false;
-		else
-			return true;				
-	}
+        function testConnect () {
+                return $this->Dock();
+                if (!$this->Dock())
+                        return false;
+                else
+                        return true;
+        }
+
+        /**
+         * Safely escape user-supplied values for LDAP filters.
+         */
+        private function escapeFilterValue($value) {
+                $filterFlag = defined('LDAP_ESCAPE_FILTER') ? LDAP_ESCAPE_FILTER : 0;
+
+                if (function_exists('wp_ldap_escape')) {
+                        return wp_ldap_escape($value, '', $filterFlag);
+                }
+
+                if (function_exists('ldap_escape')) {
+                        return ldap_escape($value, '', $filterFlag);
+                }
+
+                $search  = array("\0", "\\", "(", ")", "*");
+                $replace = array('\\00', '\\\\', '\\28', '\\29', '\\2a');
+
+                return str_replace($search, $replace, $value);
+        }
 }

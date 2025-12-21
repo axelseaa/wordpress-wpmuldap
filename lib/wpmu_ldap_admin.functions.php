@@ -6,12 +6,49 @@
  * @return null - does not actively return a value
  */
 function ldap_addstylesheet() {
-	$base = WP_PLUGIN_DIR.'/'.basename(dirname(dirname(__FILE__)));
+        $base = WP_PLUGIN_DIR.'/'.basename(dirname(dirname(__FILE__)));
         $myStyleUrl = plugins_url('css/ldap_auth.css', $base.'/ldap_auth.php'); // Respects SSL, Style.css is relative to the current file
         $myStyleFile = WP_PLUGIN_DIR . '/wpmuldap/css/ldap_auth.css';
         if ( file_exists($myStyleFile) ) {
             wp_register_style('wpmu-ldap-css', $myStyleUrl);
             wp_enqueue_style('wpmu-ldap-css');
+        }
+}
+
+function wpmuLdapSanitizeOption($key, $value) {
+        $value = wp_unslash($value);
+
+        switch ($key) {
+                case 'ldapServerPort':
+                        return absint($value);
+                case 'ldapAuth':
+                case 'ldapBulkAdd':
+                case 'ldapCreateAcct':
+                case 'ldapCreateBlog':
+                case 'ldapCreateLocalUser':
+                case 'ldapDisableSignup':
+                case 'ldapEnableSSL':
+                case 'ldapGroupAllowLogin':
+                case 'ldapGroupAllowLoginCreate':
+                case 'ldapGroupDenyLogin':
+                case 'ldapLDAPEmail':
+                case 'ldapLinuxWindows':
+                case 'ldapLocalEmail':
+                case 'ldapPublicDisplayName':
+                case 'ldapSSOEnabled':
+                case 'ldapSiteOneAdd':
+                case 'ldapAddUser':
+                case 'ldapTestConnection':
+                        return sanitize_text_field($value);
+                case 'ldapServerPass':
+                        return sanitize_text_field($value);
+                case 'ldapGetPasswordMessage':
+                case 'ldapLDAPEmailMessage':
+                case 'ldapLocalEmailMessage':
+                case 'ldapSignupMessage':
+                        return wp_kses_post($value);
+                default:
+                        return sanitize_text_field($value);
         }
 }
 
@@ -67,43 +104,58 @@ function wpmuLdapOptionsMenu($tab) {
 
 function wpmuProcessUpdates() {
         if (isset($_POST['ldapOptionsSave'])) {
-		foreach ($_POST as $key => $item) {
-			if (stripos($key,'attribute')) $item = strtolower($item);
-			if ($key != 'ldapOptionsSave' || $key != 'ldapTestConnection') update_site_option($key,stripslashes($item));
-		}
+                check_admin_referer('wpmu_ldap_save_options');
 
-		# Test Ldap Connection
-		if (isset($_POST['ldapTestConnection'])) {
-			if (wpmuLdapTestConnection())
-		                echo "<div id='message' class='updated fade'><p><b>LDAP Connection Test:</b> Successful!</p></div>";
-			else			
-		                echo "<div id='message' class='error fade'><p><b>LDAP Connection Test:</b> Failed</p></div>";
-		}
+                foreach ($_POST as $key => $item) {
+                        if (in_array($key, array('ldapOptionsSave', 'ldapTestConnection', '_wpnonce', '_wp_http_referer'), true)) {
+                                continue;
+                        }
 
-                echo "<div id='message' class='updated fade'><p>Saved Options!</p></div>";
-	} else if ($_POST['ldapGroupsSave']) {
-		$allow = explode("\n", $_POST['ldapGroupAllowLogin']);
-		$allow = array_filter(array_map('trim', $allow));
-		update_site_option('ldapGroupAllowLogin',$allow);
+                        if (stripos($key,'attribute') !== false) {
+                                $item = strtolower($item);
+                        }
 
-		#$allowCreate = explode("\n", $_POST['ldapGroupAllowLoginCreate']);
-		#$allowCreate = array_filter(array_map('trim', $allowCreate));
-		#update_site_option('ldapGroupAllowLoginCreate',$allowCreate);
+                        update_site_option($key, wpmuLdapSanitizeOption($key, $item));
+                }
 
-		$deny = explode("\n", $_POST['ldapGroupDenyLogin']);
-		$deny = array_filter(array_map('trim', $deny));
-		update_site_option('ldapGroupDenyLogin',$deny);
+                # Test Ldap Connection
+                if (isset($_POST['ldapTestConnection'])) {
+                        if (wpmuLdapTestConnection())
+                                echo "<div id='message' class='updated fade'><p><b>LDAP Connection Test:</b> Successful!</p></div>";
+                        else
+                                echo "<div id='message' class='error fade'><p><b>LDAP Connection Test:</b> Failed</p></div>";
+                }
 
                 echo "<div id='message' class='updated fade'><p>Saved Options!</p></div>";
-        } else if ($_POST['ldapFixMeta']) {
+        } else if (isset($_POST['ldapGroupsSave'])) {
+                check_admin_referer('wpmu_ldap_save_groups');
+
+                $allow = explode("\n", wp_unslash($_POST['ldapGroupAllowLogin']));
+                $allow = array_filter(array_map('sanitize_text_field', array_map('trim', $allow)));
+                update_site_option('ldapGroupAllowLogin',$allow);
+
+                #$allowCreate = explode("\n", $_POST['ldapGroupAllowLoginCreate']);
+                #$allowCreate = array_filter(array_map('trim', $allowCreate));
+                #update_site_option('ldapGroupAllowLoginCreate',$allowCreate);
+
+                $deny = explode("\n", wp_unslash($_POST['ldapGroupDenyLogin']));
+                $deny = array_filter(array_map('sanitize_text_field', array_map('trim', $deny)));
+                update_site_option('ldapGroupDenyLogin',$deny);
+
+                echo "<div id='message' class='updated fade'><p>Saved Options!</p></div>";
+        } else if (isset($_POST['ldapFixMeta'])) {
+                check_admin_referer('wpmu_ldap_run_upgrade');
+
                 wpmuLdapFixMeta();
                 update_site_option('ldapfixmetafor15','true');
                 echo "<div id='message' class='updated fade'><p>All users ldap_auth meta values updated!</p></div>";
-        } else if ($_POST['ldapFixDisplayName']) {
+        } else if (isset($_POST['ldapFixDisplayName'])) {
+                check_admin_referer('wpmu_ldap_run_upgrade');
+
                 wpmuLdapFixDisplayName();
                 update_site_option('ldapfixdisplayname','true');
-                echo "<div id='message' class='updated fade'><p>All users display_name meta values have been removed and set in the users table!</p></div>";		
-	}
+                echo "<div id='message' class='updated fade'><p>All users display_name meta values have been removed and set in the users table!</p></div>";
+        }
 
 }
 
@@ -242,8 +294,9 @@ function ldapOptionsPanelGeneral() {
 
 ?>
 
-	<form method="post" id="ldap_auth_options">
-		<h3>General Settings</h3>
+        <form method="post" id="ldap_auth_options">
+                <?php wp_nonce_field('wpmu_ldap_save_options'); ?>
+                <h3>General Settings</h3>
 		<table class="form-table">
 			<tr valign="top">
 			   <th scope="row">Use Single Sign-On?</th>
@@ -335,7 +388,7 @@ function ldapOptionsPanelGeneral() {
 			<tr valign="top">
 			   <th scope="row"><label for="ldapSignupMessage">Signup-Disabled Message:</label></th>
 			   <td>
-				<textarea name='ldapSignupMessage' id='ldapSignupMessage' rows="5" cols="45" style="width: 95%;"><?php echo $ldapSignupMessage ?></textarea>
+                                <textarea name='ldapSignupMessage' id='ldapSignupMessage' rows="5" cols="45" style="width: 95%;"><?php echo esc_textarea($ldapSignupMessage); ?></textarea>
 				<br/>
 				This is an alternate HTML message that would be displayed in place of any actions at wp-signup.php.
 			   </td>
@@ -343,7 +396,7 @@ function ldapOptionsPanelGeneral() {
 			<tr valign="top">
 			   <th scope="row"><label for="ldapGetPasswordMessage">Lost-Password Message:</label></th>
 			   <td>
-				<textarea name='ldapGetPasswordMessage' id='ldapGetPasswordMessage' rows="5" cols="45" style="width: 95%;"><?php echo $ldapGetPasswordMessage ?></textarea>
+                                <textarea name='ldapGetPasswordMessage' id='ldapGetPasswordMessage' rows="5" cols="45" style="width: 95%;"><?php echo esc_textarea($ldapGetPasswordMessage); ?></textarea>
 				<br/>
 				This is the error message that would be displayed when an LDAP-account user submits "Lost Password" requests.
 			   </td>
@@ -370,9 +423,9 @@ function ldapOptionsPanelGeneral() {
 				Controls whether or not local users are emailed on account creation or when receiving access to a new blog.  It is recommended to set this to yes, otherwise local users will not receive their password when created.
 				<br/><br/>
 				<label for="ldapLocalEmailSubj">Email Subject:</label><br/>
-				<input type="text" name="ldapLocalEmailSubj" id="ldapLocalEmailSubj" value="<?php echo $ldapLocalEmailSubj ?>" /><br />
+                                <input type="text" name="ldapLocalEmailSubj" id="ldapLocalEmailSubj" value="<?php echo esc_attr($ldapLocalEmailSubj); ?>" /><br />
 				<label for="ldapLocalEmailMessage">Email Body:</label><br/>
-				<textarea name="ldapLocalEmailMessage" id="ldapLocalEmailMessage" rows="5" cols="45" style="width: 95%;"><?php echo $ldapLocalEmailMessage ?></textarea>
+                                <textarea name="ldapLocalEmailMessage" id="ldapLocalEmailMessage" rows="5" cols="45" style="width: 95%;"><?php echo esc_textarea($ldapLocalEmailMessage); ?></textarea>
 			   </td>
 			</tr>
 			<tr valign="top">
@@ -384,9 +437,9 @@ function ldapOptionsPanelGeneral() {
 				Controls whether or not ldap users are emailed on account creation or when receiving access to a new blog.
 				<br/><br/>
 				<label for="ldapLDAPEmailSubj">Email Subject:</label><br/>
-				<input type="text" name="ldapLDAPEmailSubj" id="ldapLDAPEmailSubj" value="<?php echo $ldapLDAPEmailSubj ?>" /><br />
+                                <input type="text" name="ldapLDAPEmailSubj" id="ldapLDAPEmailSubj" value="<?php echo esc_attr($ldapLDAPEmailSubj); ?>" /><br />
 				<label for="ldapLDAPEmailMessage">Email Body:</label><br/>
-				<textarea name="ldapLDAPEmailMessage" id="ldapLDAPEmailMessage" rows="5" cols="45" style="width: 95%;"><?php echo $ldapLDAPEmailMessage ?></textarea>
+                                <textarea name="ldapLDAPEmailMessage" id="ldapLDAPEmailMessage" rows="5" cols="45" style="width: 95%;"><?php echo esc_textarea($ldapLDAPEmailMessage); ?></textarea>
 			   </td>
 			</tr>
 		</table>
@@ -431,8 +484,9 @@ function ldapOptionsPanelConnection() {
 	account to allow access if the LDAP server is unavailable.
 	</p>
 
-	<form method="post" id="ldap_auth_options">
-		<h3>Connection Settings</h3>
+        <form method="post" id="ldap_auth_options">
+                <?php wp_nonce_field('wpmu_ldap_save_options'); ?>
+                <h3>Connection Settings</h3>
 		<table class="form-table">
 			<tr valign="top">
 			   <th scope="row">LDAP-Authentication:</th>
@@ -456,7 +510,7 @@ function ldapOptionsPanelConnection() {
 			<tr valign="top">
 			   <th scope="row"><label for="serverAddr">Server Address:</label></th>
 			   <td>
-				<input type='text' name='ldapServerAddr' id='serverAddr' value='<?php echo $ldapServerAddr ?>' style='width: 300px;' />
+                                <input type='text' name='ldapServerAddr' id='serverAddr' value='<?php echo esc_attr($ldapServerAddr); ?>' style='width: 300px;' />
 				<br/>
 				The name or IP address of the LDAP server.  The protocol should be left out. (Ex. ldap.example.com)
 			   </td>
@@ -464,7 +518,7 @@ function ldapOptionsPanelConnection() {
 			<tr valign="top">
 			   <th scope="row"><label for="serverPort">Server Port:</label></th>
 			   <td>
-				<input type='text' name='ldapServerPort' id='serverPort' value='<?php echo $ldapServerPort ?>' style='width: 300px;' />
+                                <input type='text' name='ldapServerPort' id='serverPort' value='<?php echo esc_attr($ldapServerPort); ?>' style='width: 300px;' />
 				<br/>
                                 Port Number of the LDAP server. (LDAP: Linux=389, Windows=3268) (LDAPS: Linux=636, Windows=3269)
 			   </td>
@@ -472,7 +526,7 @@ function ldapOptionsPanelConnection() {
 			<tr valign="top">
 			   <th scope="row"><label for="serverOU">Search DN:</label></th>
 			   <td>
-				<input type='text' name='ldapServerOU' id='serverOU' value='<?php echo $ldapServerOU; ?>' style='width: 450px;' />
+                                <input type='text' name='ldapServerOU' id='serverOU' value='<?php echo esc_attr($ldapServerOU); ?>' style='width: 450px;' />
 				<br/>
 				The base DN in which to carry out LDAP searches.
 			   </td>
@@ -480,7 +534,7 @@ function ldapOptionsPanelConnection() {
 			<tr valign="top">
 			   <th scope="row"><label for="serverCN">Search User DN:</label></th>
 			   <td>
-				<input type='text' name='ldapServerCN' id='serverCN' value='<?php echo $ldapServerCN; ?>' style='width: 450px;' />
+                                <input type='text' name='ldapServerCN' id='serverCN' value='<?php echo esc_attr($ldapServerCN); ?>' style='width: 450px;' />
 			   	<br/>
 				Some systems do not allow anonymous searching for attributes, and so this will set the account to use when connecting for searches.
 			   </td>
@@ -488,7 +542,7 @@ function ldapOptionsPanelConnection() {
 			<tr valign="top">
 			   <th scope="row"><label for='serverPass'>Search User Password:</label></th>
 			   <td>
-				<input type='password' name='ldapServerPass' id='serverPass' value='<?php echo $ldapServerPass; ?>' />
+                                <input type='password' name='ldapServerPass' id='serverPass' value='<?php echo esc_attr($ldapServerPass); ?>' />
 				<br/>
 				Password for the User DN above.
 			   </td>
@@ -518,8 +572,9 @@ function ldapOptionsPanelConnection() {
 function ldapOptionsPanelUpdates() {
 	extract(getWpmuLdapSiteOptions());
 ?>
-	<form method="post" id="ldap_fix_meta">
-		<h3>Upgrade</h3>
+        <form method="post" id="ldap_fix_meta">
+                <?php wp_nonce_field('wpmu_ldap_run_upgrade'); ?>
+                <h3>Upgrade</h3>
 		<table class="form-table">
 			<tr valign="top">
 			   <th scope="row"><?php _e('Update Display Name'); ?></th>
@@ -546,6 +601,7 @@ function ldapAttributeMapping() {
         extract(getWpmuLdapSiteOptions());
 ?>
         <form method="post" id="ldap_auth_options">
+                <?php wp_nonce_field('wpmu_ldap_save_options'); ?>
                 <h3>LDAP Attribute Mapping</h3>
 		<p>This page will allow you to modify which ldap attribute the plugin uses to populate default values for the user.</p>
                 <b>General Attributes</b>
@@ -553,56 +609,56 @@ function ldapAttributeMapping() {
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeMail">Email:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeMail" id="ldapAttributeMail" value="<?php echo $ldapAttributeMail ?>" />
+                                <input type="text" name="ldapAttributeMail" id="ldapAttributeMail" value="<?php echo esc_attr($ldapAttributeMail); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeGivenname">Givenname (Firstname):</label></th>
                            <td>
-				<input type="text" name="ldapAttributeGivenname" id="ldapAttributeGivenname" value="<?php echo $ldapAttributeGivenname ?>" />
+                                <input type="text" name="ldapAttributeGivenname" id="ldapAttributeGivenname" value="<?php echo esc_attr($ldapAttributeGivenname); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeSn">Surname (Lastname):</label></th>
                            <td>
-				<input type="text" name="ldapAttributeSn" id="ldapAttributeSn" value="<?php echo $ldapAttributeSn ?>" />
+                                <input type="text" name="ldapAttributeSn" id="ldapAttributeSn" value="<?php echo esc_attr($ldapAttributeSn); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeNickname">Nickname:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeNickname" id="ldapAttributeNickname" value="<?php echo $ldapAttributeNickname ?>" />
+                                <input type="text" name="ldapAttributeNickname" id="ldapAttributeNickname" value="<?php echo esc_attr($ldapAttributeNickname); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributePhone">Phone:</label></th>
                            <td>
-				<input type="text" name="ldapAttributePhone" id="ldapAttributePhone" value="<?php echo $ldapAttributePhone ?>" />
+                                <input type="text" name="ldapAttributePhone" id="ldapAttributePhone" value="<?php echo esc_attr($ldapAttributePhone); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeHomedir">Home Directory:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeHomedir" id="ldapAttributeHomedir" value="<?php echo $ldapAttributeHomedir ?>" />
+                                <input type="text" name="ldapAttributeHomedir" id="ldapAttributeHomedir" value="<?php echo esc_attr($ldapAttributeHomedir); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeMacaddress">Mac Address:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeMacaddress" id="ldapAttributeMacaddress" value="<?php echo $ldapAttributeMacaddress ?>" />
+                                <input type="text" name="ldapAttributeMacaddress" id="ldapAttributeMacaddress" value="<?php echo esc_attr($ldapAttributeMacaddress); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeDn">Distinguished Name (DN):</label></th>
                            <td>
-				<input type="text" name="ldapAttributeDn" id="ldapAttributeDn" value="<?php echo $ldapAttributeDn ?>" />
+                                <input type="text" name="ldapAttributeDn" id="ldapAttributeDn" value="<?php echo esc_attr($ldapAttributeDn); ?>" />
 				<br/>
                            </td>
                         </tr>
@@ -613,21 +669,21 @@ function ldapAttributeMapping() {
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeWinSearch">Search Attribute:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeWinSearch" id="ldapAttributeWinSearch" value="<?php echo $ldapAttributeWinSearch ?>" />
+                                <input type="text" name="ldapAttributeWinSearch" id="ldapAttributeWinSearch" value="<?php echo esc_attr($ldapAttributeWinSearch); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeMember">Group Attribute:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeMember" id="ldapAttributeMember" value="<?php echo $ldapAttributeMember ?>" />
+                                <input type="text" name="ldapAttributeMember" id="ldapAttributeMember" value="<?php echo esc_attr($ldapAttributeMember); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeGroupObjectclass">Group Objectclass:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeGroupObjectclass" id="ldapAttributeGroupObjectclass" value="<?php echo $ldapAttributeGroupObjectclass ?>" />
+                                <input type="text" name="ldapAttributeGroupObjectclass" id="ldapAttributeGroupObjectclass" value="<?php echo esc_attr($ldapAttributeGroupObjectclass); ?>" />
 				<br/>
                            </td>
                         </tr>
@@ -638,21 +694,21 @@ function ldapAttributeMapping() {
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeNixSearch">Search Attribute:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeNixSearch" id="ldapAttributeNixSearch" value="<?php echo $ldapAttributeNixSearch ?>" />
+                                <input type="text" name="ldapAttributeNixSearch" id="ldapAttributeNixSearch" value="<?php echo esc_attr($ldapAttributeNixSearch); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeMemberNix">Group Attribute:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeMemberNix" id="ldapAttributeMemberNix" value="<?php echo $ldapAttributeMemberNix ?>" />
+                                <input type="text" name="ldapAttributeMemberNix" id="ldapAttributeMemberNix" value="<?php echo esc_attr($ldapAttributeMemberNix); ?>" />
 				<br/>
                            </td>
                         </tr>
                         <tr valign="top">
                            <th scope="row"><label for="ldapAttributeGroupObjectclassNix">Group Objectclass:</label></th>
                            <td>
-				<input type="text" name="ldapAttributeGroupObjectclassNix" id="ldapAttributeGroupObjectclassNix" value="<?php echo $ldapAttributeGroupObjectclassNix ?>" />
+                                <input type="text" name="ldapAttributeGroupObjectclassNix" id="ldapAttributeGroupObjectclassNix" value="<?php echo esc_attr($ldapAttributeGroupObjectclassNix); ?>" />
 				<br/>
                            </td>
                         </tr>
@@ -667,6 +723,7 @@ function ldapOptionsPanelGroup() {
         extract(getWpmuLdapSiteOptions());
 ?>
         <form method="post" id="ldap_auth_groups">
+                <?php wp_nonce_field('wpmu_ldap_save_groups'); ?>
                 <h3>LDAP Group Settings</h3>
                 <p>This page allows you to specify allow and deny groups for site wide blog access.  In the boxes below, enter the 
 		full dn to each group.  For multiple groups, enter each group on a new line.  Nested groups are supported.</p>
@@ -674,7 +731,7 @@ function ldapOptionsPanelGroup() {
                         <tr valign="top">
                            <th scope="row"><label for="ldap">Allow Login:</label></th>
                            <td>
-                                <textarea rows="2" cols="70" name="ldapGroupAllowLogin" id="ldapGroupAllowLogin"><?php echo $ldapGroupAllowLogin ?></textarea>
+                                <textarea rows="2" cols="70" name="ldapGroupAllowLogin" id="ldapGroupAllowLogin"><?php echo esc_textarea($ldapGroupAllowLogin); ?></textarea>
                                 <br/>
                            </td>
                         </tr>
@@ -688,7 +745,7 @@ function ldapOptionsPanelGroup() {
                         <tr valign="top">
                            <th scope="row"><label for="ldap">Deny Login:</label></th>
                            <td>
-                                <textarea rows="2" cols="70" name="ldapGroupDenyLogin" id="ldapGroupDenyLogin"><?php echo $ldapGroupDenyLogin ?></textarea>
+                                <textarea rows="2" cols="70" name="ldapGroupDenyLogin" id="ldapGroupDenyLogin"><?php echo esc_textarea($ldapGroupDenyLogin); ?></textarea>
                                 <br/>
                            </td>
                         </tr>
@@ -820,7 +877,7 @@ function wpmuLdapFixMeta() {
 	global $wpdb;
 	$users = $wpdb->get_results("SELECT ID from $wpdb->users WHERE ID > 1");
 	foreach ($users as $user) {
-	        update_usermeta( $user->ID, 'ldap_login', 'true' );
+	        update_user_meta( $user->ID, 'ldap_login', 'true' );
 	}
 }
 
@@ -889,7 +946,7 @@ function wpmuUserFormLdapOptionUpdate() {
 		return;
 
 	if ($_POST['ldapAccountType'] == 'LDAP')
-		update_usermeta( $user_id, 'ldap_login', 'true' );
+		update_user_meta( $user_id, 'ldap_login', 'true' );
 	else
 		delete_usermeta( $user_id, 'ldap_login' );
 		
