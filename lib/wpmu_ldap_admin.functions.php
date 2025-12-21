@@ -66,10 +66,10 @@ function ldapOptionsPanel() {
 	// Process POST Updates
 	if ($_SERVER['REQUEST_METHOD'] == 'POST') wpmuProcessUpdates();
 
-	if (isset($_GET['ldaptab']))
-		$tab = $_GET['ldaptab'];
-	else
-		$tab = '';
+        if (isset($_GET['ldaptab']))
+                $tab = sanitize_key($_GET['ldaptab']);
+        else
+                $tab = '';
 	$allowedtabs = array('general','connection','attributes','updates');
 ?>
 <div class="wrap">

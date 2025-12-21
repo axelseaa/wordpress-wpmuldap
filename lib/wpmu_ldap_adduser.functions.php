@@ -22,9 +22,9 @@ function ldap_addmenuuser() {
 }
 
 function ldapAddUserResult($options) {
-	extract($options);
-	if (!empty($username))
-		$user = '<b>'.$username.'</b>';
+        extract($options);
+        if (!empty($username))
+                $user = '<b>'.esc_html($username).'</b>';
 	if ( $updated == 'true' ) {
 		?>
 		<div id="message" class="updated fade"><p>
@@ -88,20 +88,22 @@ function ldapAddUserResult($options) {
 function ldapAddUserOptions() {
 	global $blog_id, $current_user;
 
-	if (isset($_POST['addUser'])) {
-		// Process the post request
-		$user = $_POST['user'];
-                if ( empty($user['username']) && empty($user['email']) ) {
+        if (isset($_POST['addUser'])) {
+                check_admin_referer('add-user');
+                // Process the post request
+                $user = isset($_POST['user']) ? wp_unslash($_POST['user']) : array();
+                $username = isset($user['username']) ? sanitize_user($user['username'], true) : '';
+                if ( empty($username) && empty($user['email']) ) {
                         wp_die( __("<p>Missing username.</p>") );
                 }
-		$username = strtolower($user['username']);
+                $username = strtolower($username);
 
                 // try finding a WP account for this user name
                 $login = get_user_by('login',$username);
 		if (!$login) {
 			$result = wpmuLdapSearchUser(array(	'username' => $username,
 								'blog_id' => $blog_id,
-								'new_role' => $user['new_role']));
+								'new_role' => sanitize_text_field($user['new_role'])));
 
 			if (is_wp_error($result)) {
 				ldapAddUserResult(array('updated' => 'false','error' => $result,'username' => $username));
@@ -114,10 +116,10 @@ function ldapAddUserOptions() {
                 		        ?>
         		                <div id='message' class='updated'>
 		                        <form method='post'>
-                        	        	<p><b><?php echo $username ?></b> not found in LDAP directory.  To create a local user, enter the users email:
+                                                <p><b><?php echo esc_html($username) ?></b> not found in LDAP directory.  To create a local user, enter the users email:
                 	        	        <input type='text' name='user[email]' size='15' />
-        	        	                <input type='hidden' name='user[username]' value='<?php echo $username ?>' />
-	        	                        <input type='hidden' name='user[role]' value='<?php echo $user['new_role'] ?>' />
+                                                <input type='hidden' name='user[username]' value='<?php echo esc_attr($username) ?>' />
+                                                <input type='hidden' name='user[role]' value='<?php echo esc_attr($user['new_role']) ?>' />
         	                        	<?php wp_nonce_field('add-local-user') ?>
 	                        	        <input type='submit' class='button' name='addLocalUser' value='Create Local User' />
                 		        </form></p>
@@ -129,23 +131,24 @@ function ldapAddUserOptions() {
 			}
 		} else {
 			// Add User to Blog
-			if (wpmuLdapAddUserToBlog($login->ID,$blog_id,$user['new_role'])) {
+                        if (wpmuLdapAddUserToBlog($login->ID,$blog_id,sanitize_text_field($user['new_role']))) {
                                 wp_new_user_notification($login->ID);
 				ldapAddUserResult(array('updated' => 'true','action' => 'add','username' => $username));
 			} else
 				ldapAddUserResult(array('updated' => 'false','action' => 'exists','username' => $username));
 		}
-	} elseif (isset($_POST['addUserBulk'])) {
-		// Check Access
-	        $ldapBulkAdd = get_site_option('ldapBulkAdd');
-        	if (is_super_admin() || ($ldapBulkAdd && is_admin())) {
-	 		$user = $_POST['user'];
-			$usernames = array();
-			if ( !empty($user['bulk_username']) ) {
-				$usernames = explode("\n", $user['bulk_username']);
-				$usernames = array_filter(array_map('trim', $usernames)); // trim whitespace from usernames and remove empty lines
-				$usernames = array_map('strtolower', $usernames);
-			}
+        } elseif (isset($_POST['addUserBulk'])) {
+                check_admin_referer('add-user-bulk');
+                // Check Access
+                $ldapBulkAdd = get_site_option('ldapBulkAdd');
+                if (is_super_admin() || ($ldapBulkAdd && is_admin())) {
+                        $user = isset($_POST['user']) ? wp_unslash($_POST['user']) : array();
+                        $usernames = array();
+                        if ( !empty($user['bulk_username']) ) {
+                                $usernames = explode("\n", $user['bulk_username']);
+                                $usernames = array_filter(array_map('sanitize_user', array_map('trim', $usernames))); // trim whitespace from usernames and remove empty lines
+                                $usernames = array_map('strtolower', $usernames);
+                        }
 	
 			foreach ($usernames as $username) {
 	        	        // try finding a WP account for this user name
@@ -153,7 +156,7 @@ function ldapAddUserOptions() {
 				if (!$login) {
 					$result = wpmuLdapSearchUser(array(	'username' => $username,
 										'blog_id' => $blog_id,
-										'new_role' => $user['bulk_new_role'],
+										'new_role' => sanitize_text_field($user['bulk_new_role']),
 										'createBlog' => false));
 					if (is_wp_error($result)) {
 						ldapAddUserResult(array('updated' => 'false','error' => $result,'username' => $username));
@@ -167,7 +170,7 @@ function ldapAddUserOptions() {
 					}
 				} else {
 					// Add User to Blog
-					if (wpmuLdapAddUserToBlog($login->ID,$blog_id,$user['bulk_new_role'])) {
+					if (wpmuLdapAddUserToBlog($login->ID,$blog_id,sanitize_text_field($user['bulk_new_role']))) {
                                                 wp_new_user_notification($login->ID);
 						ldapAddUserResult(array('updated' => 'true','action' => 'add','username' => $username));
 					} else
@@ -177,21 +180,23 @@ function ldapAddUserOptions() {
 		} else {
 			ldapAddUserResult(array('updated' => 'false','action' => 'auth'));
 		}
-	} elseif (isset($_POST['addLocalUser'])) {
-               	check_admin_referer('add-local-user');
-		$ldapCreateLocalUser = get_site_option('ldapCreateLocalUser');
-		if ($ldapCreateLocalUser || is_super_admin())  {
-                	$user = $_POST['user'];
-                	if ( empty($user['username']) && empty($user['email']) ) {
-                        	wp_die( __("<p>Missing username and email.</p>") );
-                	} elseif ( empty($user['username']) ) {
-                        	wp_die( __("<p>Missing username.</p>") );
-                	} elseif ( empty($user['email']) ) {
-                        	wp_die( __("<p>Missing email.</p>") );
-                	}
+        } elseif (isset($_POST['addLocalUser'])) {
+                check_admin_referer('add-local-user');
+                $ldapCreateLocalUser = get_site_option('ldapCreateLocalUser');
+                if ($ldapCreateLocalUser || is_super_admin())  {
+                        $user = isset($_POST['user']) ? wp_unslash($_POST['user']) : array();
+                        $username = isset($user['username']) ? sanitize_user($user['username'], true) : '';
+                        $email = isset($user['email']) ? sanitize_email($user['email']) : '';
+                        if ( empty($username) && empty($email) ) {
+                                wp_die( __("<p>Missing username and email.</p>") );
+                        } elseif ( empty($username) ) {
+                                wp_die( __("<p>Missing username.</p>") );
+                        } elseif ( empty($email) ) {
+                                wp_die( __("<p>Missing email.</p>") );
+                        }
 
                     $password = wp_generate_password();
-                	$user_id = wpmu_create_user(wp_specialchars( strtolower( $user['username'] ) ), $password, wp_specialchars( $user['email'] ) );
+                        $user_id = wpmu_create_user(wp_specialchars( strtolower( $username ) ), $password, wp_specialchars( $email ) );
 
                 	if( false == $user_id ) {
                         	wp_die( __("<p>Duplicated username or email address.</p>") );
@@ -199,16 +204,16 @@ function ldapAddUserOptions() {
                         	wp_new_user_notification($user_id, $password);
                		}
 
-			// Update User Meta
-			update_user_meta($user_id, 'primary_blog', $blog_id );				
+                        // Update User Meta
+                        update_user_meta($user_id, 'primary_blog', $blog_id );
 
-			// Configure User Role
-			add_user_to_blog($blog_id, $user_id, $user['role']);
+                        // Configure User Role
+                        add_user_to_blog($blog_id, $user_id, sanitize_text_field($user['role']));
 
-			ldapAddUserResult(array('updated' => 'true','action' => 'add','username' => $user['username']));
-		} else {
+                        ldapAddUserResult(array('updated' => 'true','action' => 'add','username' => $username));
+                } else {
                         wp_die( __("<p>Access denied.</p>") );
-		}
+                }
 	} 
 	?>
 
