@@ -820,7 +820,7 @@ function wpmuLdapFixMeta() {
 	global $wpdb;
 	$users = $wpdb->get_results("SELECT ID from $wpdb->users WHERE ID > 1");
 	foreach ($users as $user) {
-	        update_usermeta( $user->ID, 'ldap_login', 'true' );
+	        update_user_meta( $user->ID, 'ldap_login', 'true' );
 	}
 }
 
@@ -889,7 +889,7 @@ function wpmuUserFormLdapOptionUpdate() {
 		return;
 
 	if ($_POST['ldapAccountType'] == 'LDAP')
-		update_usermeta( $user_id, 'ldap_login', 'true' );
+		update_user_meta( $user_id, 'ldap_login', 'true' );
 	else
 		delete_usermeta( $user_id, 'ldap_login' );
 		
