@@ -1,5 +1,9 @@
 <?php
 
+if (!function_exists('wpmuLdapAddUserToBlog')) {
+        require_once __DIR__ . '/wpmu_ldap.functions.php';
+}
+
 function ldap_addmenuuser() {
         $objCurrUser = wp_get_current_user();
         $objUser = wp_cache_get($objCurrUser->ID, 'users');
