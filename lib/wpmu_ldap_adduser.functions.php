@@ -186,7 +186,7 @@ function ldapAddUserOptions() {
                         	wp_die( __("<p>Missing email.</p>") );
                 	}
 
-                	$password = generate_random_password();
+                    $password = wp_generate_password();
                 	$user_id = wpmu_create_user(wp_specialchars( strtolower( $user['username'] ) ), $password, wp_specialchars( $user['email'] ) );
 
                 	if( false == $user_id ) {
@@ -196,7 +196,7 @@ function ldapAddUserOptions() {
                		}
 
 			// Update User Meta
-			update_usermeta($user_id, 'primary_blog', $blog_id );				
+			update_user_meta($user_id, 'primary_blog', $blog_id );				
 
 			// Configure User Role
 			add_user_to_blog($blog_id, $user_id, $user['role']);

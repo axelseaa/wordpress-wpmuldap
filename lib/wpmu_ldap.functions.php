@@ -12,12 +12,20 @@
 function wpmuLdapCreateWPUserFromLdap($opts) {
 	global $base, $error, $wpdb, $current_site;
 
-	// Extract Inputs
-        extract($opts);
-	if (!isset($newUserName)) 	$newUserName = '';
-	if (!isset($newUserPassword)) 	$newUserPassword = '';
-	if (!isset($ldapUserData)) 	$ldapUserData = false;
-	if (!isset($createBlog))		$createBlog = true;
+	$args = wp_parse_args(
+		$opts,
+		array(
+			'newUserName' => '',
+			'newUserPassword' => '',
+			'ldapUserData' => false,
+			'createBlog' => true,
+		)
+	);
+
+	$newUserName = $args['newUserName'];
+	$newUserPassword = $args['newUserPassword'];
+	$ldapUserData = $args['ldapUserData'];
+	$createBlog = (bool) $args['createBlog'];
 
 	// Sanitize username
 	$newUserName = trim($newUserName);
@@ -31,7 +39,7 @@ function wpmuLdapCreateWPUserFromLdap($opts) {
 		return new WP_Error('ldapcreate_emailconflict', sprintf(__('<strong>ERROR</strong>: <strong>%s</strong> (%s) is already associated with another account.  All accounts (including the admin account) must have an unique email address.'),$ldapUserData[LDAP_INDEX_EMAIL],$newUserName));
 
 	// we don't actually care about the WP password (since it's LDAP), but we need one for WP database
-	$sPassword = generate_random_password();
+        $sPassword = wp_generate_password();
 	$user_id = wpmu_create_user( $newUserName, $sPassword, $ldapUserData[LDAP_INDEX_EMAIL] );
 
 	if ( $user_id === false ) {
@@ -39,9 +47,9 @@ function wpmuLdapCreateWPUserFromLdap($opts) {
 	}
 
 	//Update their first and last name from ldap
-	update_usermeta( $user_id, 'first_name', $ldapUserData[LDAP_INDEX_GIVEN_NAME] );
-	update_usermeta( $user_id, 'last_name', $ldapUserData[LDAP_INDEX_SURNAME] );
-	update_usermeta( $user_id, 'ldap_login', 'true' );
+	update_user_meta( $user_id, 'first_name', $ldapUserData[LDAP_INDEX_GIVEN_NAME] );
+	update_user_meta( $user_id, 'last_name', $ldapUserData[LDAP_INDEX_SURNAME] );
+	update_user_meta( $user_id, 'ldap_login', 'true' );
 
 	//Set Public Display Name
 	$displayName = get_site_option('ldapPublicDisplayName');
@@ -187,8 +195,8 @@ function wpmuLdapProcess(&$loginObj, $loginUserName, $loginPassword, $userDataAr
 	// Since the login was successful, lets set a meta object to know we are using ldap
 	$ldapMeta = get_user_meta($loginObj->ID,'ldap_login',true);
 	if ($ldapMeta != 'true') {
-		if (!update_usermeta($loginObj->ID, 'ldap_login', 'true')) {
-		        return new WP_Error('update_usermeta', __('<strong>ERROR</strong>: Error updating user meta information.'));
+		if (!update_user_meta($loginObj->ID, 'ldap_login', 'true')) {
+		        return new WP_Error('update_user_meta', __('<strong>ERROR</strong>: Error updating user meta information.'));
 		}
 	}
 
@@ -235,17 +243,26 @@ function wpmuLdapSearch($ldapString,$in_username,&$userDataArray) {
  */
 function wpmuLdapSearchUser($opts) {
 
-        // Extract Inputs
-        extract($opts);
-	if (!isset($username))		$username = '';
-	if (!isset($blog_id))		$blog_id = 1;
-	if (!isset($new_role))		$new_role = 'subscriber';
-	if (!isset($createUser))	$createUser = true;
-	if (!isset($createBlog))	$createBlog = true;
+        $args = wp_parse_args(
+                $opts,
+                array(
+                        'username' => '',
+                        'blog_id' => 1,
+                        'new_role' => 'subscriber',
+                        'createUser' => true,
+                        'createBlog' => true,
+                )
+        );
 
-	// Bind to directory, search for username
-	$ldapString = wpmuSetupLdapOptions();
-	$userDataArray = null;
+        $username = $args['username'];
+        $blog_id = (int) $args['blog_id'];
+        $new_role = $args['new_role'];
+        $createUser = (bool) $args['createUser'];
+        $createBlog = (bool) $args['createBlog'];
+
+        // Bind to directory, search for username
+        $ldapString = wpmuSetupLdapOptions();
+        $userDataArray = null;
 	if (wpmuLdapSearch($ldapString,$username,$userDataArray)) {
 		if ($createUser) {
 			if ($user_id = username_exists($username)) {
@@ -264,7 +281,7 @@ function wpmuLdapSearchUser($opts) {
 					add_user_to_blog($blog_id, $user_id, $new_role);
 
 					// Update User Meta
-					update_usermeta($user_id, 'primary_blog', $blog_id );
+					update_user_meta($user_id, 'primary_blog', $blog_id );
 				}
 				return array( true, $user_id );
 			} else {
@@ -319,10 +336,10 @@ function wpmuUpdateBlogAccess($userid) {
 		// reset primary blog to #1 (or dashboard) and add subscriber role
 		if ($dashboard = get_site_option( 'dashboard_blog' )) {
         		add_user_to_blog( $dashboard, $userid, get_site_option( 'default_user_role', 'subscriber' ) );
-        		update_usermeta($userid, "primary_blog", $dashboard);
+        		update_user_meta($userid, "primary_blog", $dashboard);
 		} else {
 			add_user_to_blog( '1', $userid, get_site_option( 'default_user_role', 'subscriber' ) );
-			update_usermeta($userid, "primary_blog", 1);
+			update_user_meta($userid, "primary_blog", 1);
 		}
 	}
 }
@@ -358,11 +375,15 @@ function wpmuLdapCheckLdapMeta($userdata) {
 function wpmuLdapSSOAuthenticate($user, $username, $password) {
 	if ( is_a($user, 'WP_User') ) return $user;
 
-	// only try SSO if we have not just logged out and
-	// we're not trying to log in with a different username
-	if ( empty($username) && empty($password) && empty($_GET['loggedout'])) {
-		$username = wpmuLdapSSOGetUsername();
-		if (empty($username)) return $user; // can't log in without a username
+        // only try SSO if we have not just logged out and
+        // we're not trying to log in with a different username
+        if ( empty($username) && empty($password) && empty($_GET['loggedout'])) {
+                if (!wpmuLdapSSOHeadersTrusted()) {
+                        return $user;
+                }
+
+                $username = wpmuLdapSSOGetUsername();
+                if (empty($username)) return $user; // can't log in without a username
 
 		//$password = wp_generate_password(); //create a random password for the local user
 
@@ -378,7 +399,18 @@ function wpmuLdapSSOAuthenticate($user, $username, $password) {
 		}
 	}
 
-	return $user;
+        return $user;
+}
+
+function wpmuLdapSSOHeadersTrusted() {
+        $trusted = (!empty($_SERVER['AUTH_TYPE']) || !empty($_SERVER['PHP_AUTH_USER']));
+
+        // Servers that populate REMOTE_USER/LOGON_USER after authentication are also trusted by default
+        if (!$trusted && (!empty($_SERVER['REMOTE_USER']) || !empty($_SERVER['LOGON_USER']) || !empty($_SERVER['AUTH_USER']))) {
+                $trusted = true;
+        }
+
+        return (bool) apply_filters('wpmu_ldap_sso_headers_trusted', $trusted);
 }
 
 /**
@@ -410,12 +442,18 @@ function wpmuLdapSSOGetUsername() {
 	elseif (!empty($_SERVER['REMOTE_USER'])) $username = $_SERVER['REMOTE_USER'];
 	elseif(!empty($_SERVER['AUTH_USER'])) $username = $_SERVER['AUTH_USER'];
 
-	// strip user account domain
-	if (strpos($username, '\\\\') !== FALSE) {
-		$username = substr($username, strpos($username, '\\\\') + 2);
-	}
+        // strip user account domain
+        if (strpos($username, '\\\\') !== FALSE) {
+                $username = substr($username, strpos($username, '\\\\') + 2);
+        }
 
-	return $username;
+        $username = trim($username);
+
+        if (!preg_match('/^[A-Za-z0-9@._-]+$/', $username)) {
+                return '';
+        }
+
+        return $username;
 }
 
 /*
