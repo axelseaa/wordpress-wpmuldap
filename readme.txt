@@ -3,7 +3,7 @@ Contributors: axelseaa
 Tags: ldap, authentication, multisite
 Requires at least: 5
 Tested up to: 6.1.1
-Stable tag: wpmu-ldap_5.1
+Stable tag: 5.1
 
 A plugin to override the core WordPress authentication method in order to use a LDAP server for authentication.  Currently only supported on MultiSite.
 
