@@ -18,9 +18,9 @@ function ldap_addstylesheet() {
 function wpmuLdapSanitizeOption($key, $value) {
         $value = wp_unslash($value);
 
-        switch ($key) {
-                case 'ldapServerPort':
-                        return absint($value);
+switch ($key) {
+case 'ldapServerPort':
+return $value === '' ? '' : absint($value);
                 case 'ldapAuth':
                 case 'ldapBulkAdd':
                 case 'ldapCreateAcct':
