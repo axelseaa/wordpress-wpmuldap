@@ -893,8 +893,8 @@ function wpmuLdapFixDisplayName() {
 		if ($ldap) {
 			$display_name = get_user_meta( $user->ID, 'display_name' , true);
 			if (!empty($display_name)) {
-				$wpdb->update( $wpdb->users, compact( 'display_name' ), array( 'ID' => $user->ID ) );
-				delete_usermeta( $user->ID, 'display_name', $display_name);
+                                $wpdb->update( $wpdb->users, compact( 'display_name' ), array( 'ID' => $user->ID ) );
+                                delete_user_meta( $user->ID, 'display_name', $display_name);
 			}
 		}
 	}
@@ -945,10 +945,10 @@ function wpmuUserFormLdapOptionUpdate() {
 	if ($user_id == 1 || !is_super_admin())
 		return;
 
-	if ($_POST['ldapAccountType'] == 'LDAP')
-		update_user_meta( $user_id, 'ldap_login', 'true' );
-	else
-		delete_usermeta( $user_id, 'ldap_login' );
+        if ($_POST['ldapAccountType'] == 'LDAP')
+                update_user_meta( $user_id, 'ldap_login', 'true' );
+        else
+                delete_user_meta( $user_id, 'ldap_login' );
 		
 } // wpmuUserFormLdapOptionUpdate()
 

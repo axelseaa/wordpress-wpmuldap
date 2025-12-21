@@ -69,8 +69,8 @@ function wpmuLdapCreateWPUserFromLdap($opts) {
 	//This is for plugin events
 	do_action('wpmu_activate_user', $user_id, $newUserPassword, false);
 
-	$domain = strtolower( wp_specialchars( $newUserName ) );
-	if( constant( "VHOST" ) == 'yes' ) {
+        $domain = strtolower( sanitize_user( $newUserName, true ) );
+        if ( is_subdomain_install() ) {
 		$newdomain = $domain . "." . $current_site->domain;
 		$path = $base;
 	}

@@ -196,7 +196,9 @@ function ldapAddUserOptions() {
                         }
 
                     $password = wp_generate_password();
-                        $user_id = wpmu_create_user(wp_specialchars( strtolower( $username ) ), $password, wp_specialchars( $email ) );
+                        $sanitized_username = sanitize_user( $username, true );
+                        $sanitized_email = sanitize_email( $email );
+                        $user_id = wpmu_create_user( $sanitized_username, $password, $sanitized_email );
 
                 	if( false == $user_id ) {
                         	wp_die( __("<p>Duplicated username or email address.</p>") );
@@ -293,7 +295,7 @@ function wpmuLdapAddGenRoleBox($id) {
 	global $wp_roles;
 	echo '<select name="user['.$id.']" id="'.$id.'">';
 	foreach($wp_roles->role_names as $role => $name) {
-		$name = translate_with_context($name);
+                $name = translate_user_role($name);
 		$selected = '';
 		if( $role == 'subscriber' )
 			$selected = 'selected="selected"';
