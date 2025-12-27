@@ -4,6 +4,9 @@ Plugin Name: WPMU Ldap Authentication
 Plugin URI: http://wpmuldap.tuxdocs.net
 Description: A plugin to override the core WordPress authentication method so as to use an LDAP server for authentication.  Currently only supported on MultiSite installations.
 Version: 5.1
+Requires at least: 5.2
+Tested up to: 6.5.3
+Requires PHP: 7.4
 Author: Aaron Axelsen
 Author URI: http://aaron.axelsen.us
 License: GPLv2 or later
