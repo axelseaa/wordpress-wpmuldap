@@ -101,10 +101,6 @@ function wpmuLdapGetServerPass() {
         }
 
         if (!wpmuLdapIsEncryptedPassword($stored)) {
-                $encrypted = wpmuLdapEncryptPassword($stored);
-                if ($encrypted !== $stored) {
-                        update_site_option('ldapServerPass', $encrypted);
-                }
                 return $stored;
         }
 
@@ -269,6 +265,12 @@ function wpmuProcessUpdates() {
 
 function wpmuLdapEncryptionNotice() {
         if (!is_super_admin()) {
+                return;
+        }
+
+        if (!function_exists('openssl_encrypt') || !function_exists('openssl_decrypt')) {
+                $message = __('<strong>LDAP password encryption is unavailable.</strong> The OpenSSL extension is required to encrypt the LDAP bind password. Please enable OpenSSL in PHP to avoid storing the password in plaintext.');
+                echo "<div class='notice notice-error'><p>{$message}</p></div>";
                 return;
         }
 
@@ -605,6 +607,11 @@ function ldapOptionsPanelConnection() {
 	accounts.  It is recommended that you still maintain a local <strong>admin</strong>
 	account to allow access if the LDAP server is unavailable.
 	</p>
+        <?php if (!defined('WPMU_LDAP_ENCRYPTION_SALT') || WPMU_LDAP_ENCRYPTION_SALT === '') { ?>
+                <div class="notice notice-info inline">
+                        <p><?php _e('LDAP bind password encryption is currently using the default WordPress salt. For stability across salt rotations, define <code>WPMU_LDAP_ENCRYPTION_SALT</code> in <code>wp-config.php</code>.'); ?></p>
+                </div>
+        <?php } ?>
 
         <form method="post" id="ldap_auth_options">
                 <?php wp_nonce_field('wpmu_ldap_save_options'); ?>
