@@ -15,6 +15,110 @@ function ldap_addstylesheet() {
         }
 }
 
+function wpmuLdapPasswordPrefix() {
+        return 'wpmu_ldap:';
+}
+
+function wpmuLdapIsEncryptedPassword($value) {
+        if (!is_string($value)) {
+                return false;
+        }
+
+        return strpos($value, wpmuLdapPasswordPrefix()) === 0;
+}
+
+function wpmuLdapGetEncryptionSalt() {
+        if (defined('WPMU_LDAP_ENCRYPTION_SALT') && WPMU_LDAP_ENCRYPTION_SALT !== '') {
+                return WPMU_LDAP_ENCRYPTION_SALT;
+        }
+
+        return wp_salt('auth');
+}
+
+function wpmuLdapEncryptPassword($password, $salt_override = null) {
+        if ($password === '' || $password === null) {
+                return $password;
+        }
+
+        if (!function_exists('openssl_encrypt')) {
+                return $password;
+        }
+
+        $cipher = 'aes-256-cbc';
+        $iv_length = openssl_cipher_iv_length($cipher);
+        $iv = function_exists('random_bytes') ? random_bytes($iv_length) : openssl_random_pseudo_bytes($iv_length);
+        $salt = $salt_override === null ? wpmuLdapGetEncryptionSalt() : $salt_override;
+        $key = hash('sha256', $salt, true);
+        $encrypted = openssl_encrypt($password, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+        if ($encrypted === false) {
+                return $password;
+        }
+
+        return wpmuLdapPasswordPrefix() . base64_encode($iv . $encrypted);
+}
+
+function wpmuLdapDecryptPassword($value) {
+        if (!wpmuLdapIsEncryptedPassword($value)) {
+                return $value;
+        }
+
+        if (!function_exists('openssl_decrypt')) {
+                return '';
+        }
+
+        $payload = substr($value, strlen(wpmuLdapPasswordPrefix()));
+        $decoded = base64_decode($payload, true);
+        if ($decoded === false) {
+                return '';
+        }
+
+        $cipher = 'aes-256-cbc';
+        $iv_length = openssl_cipher_iv_length($cipher);
+        $iv = substr($decoded, 0, $iv_length);
+        $encrypted = substr($decoded, $iv_length);
+        if ($iv === false || $encrypted === false) {
+                return '';
+        }
+
+        $key = hash('sha256', wpmuLdapGetEncryptionSalt(), true);
+        $decrypted = openssl_decrypt($encrypted, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+
+        return $decrypted === false ? '' : $decrypted;
+}
+
+function wpmuLdapMaybeEncryptPassword($password) {
+        if (wpmuLdapIsEncryptedPassword($password)) {
+                return $password;
+        }
+
+        return wpmuLdapEncryptPassword($password);
+}
+
+function wpmuLdapGetServerPass() {
+        $stored = get_site_option('ldapServerPass');
+        if ($stored === false || $stored === null || $stored === '') {
+                return $stored;
+        }
+
+        if (!wpmuLdapIsEncryptedPassword($stored)) {
+                $encrypted = wpmuLdapEncryptPassword($stored);
+                if ($encrypted !== $stored) {
+                        update_site_option('ldapServerPass', $encrypted);
+                }
+                return $stored;
+        }
+
+        $decrypted = wpmuLdapDecryptPassword($stored);
+        if ($decrypted === '') {
+                update_site_option('ldapServerPassNeedsResave', 'true');
+                return $decrypted;
+        }
+
+        delete_site_option('ldapServerPassNeedsResave');
+
+        return $decrypted;
+}
+
 function wpmuLdapSanitizeOption($key, $value) {
         $value = wp_unslash($value);
 
@@ -41,7 +145,7 @@ function wpmuLdapSanitizeOption($key, $value) {
                 case 'ldapTestConnection':
                         return sanitize_text_field($value);
                 case 'ldapServerPass':
-                        return sanitize_text_field($value);
+                        return wpmuLdapMaybeEncryptPassword(sanitize_text_field($value));
                 case 'ldapGetPasswordMessage':
                 case 'ldapLDAPEmailMessage':
                 case 'ldapLocalEmailMessage':
@@ -118,6 +222,10 @@ function wpmuProcessUpdates() {
                         update_site_option($key, wpmuLdapSanitizeOption($key, $item));
                 }
 
+                if (isset($_POST['ldapServerPass'])) {
+                        delete_site_option('ldapServerPassNeedsResave');
+                }
+
                 # Test Ldap Connection
                 if (isset($_POST['ldapTestConnection'])) {
                         if (wpmuLdapTestConnection())
@@ -158,6 +266,20 @@ function wpmuProcessUpdates() {
         }
 
 }
+
+function wpmuLdapEncryptionNotice() {
+        if (!is_super_admin()) {
+                return;
+        }
+
+        if (get_site_option('ldapServerPassNeedsResave') !== 'true') {
+                return;
+        }
+
+        $message = __('<strong>LDAP password needs attention.</strong> The saved bind password could not be decrypted with the current encryption salt. Please re-save the LDAP settings. If you rotate salts, define a stable <code>WPMU_LDAP_ENCRYPTION_SALT</code> in <code>wp-config.php</code> to avoid future failures.');
+        echo "<div class='notice notice-error'><p>{$message}</p></div>";
+}
+add_action('admin_notices', 'wpmuLdapEncryptionNotice');
 
 function getWpmuLdapSiteOptions() {
 	$defaultSignupMessage = 'Public sign-up has been disabled.';
@@ -206,7 +328,7 @@ We hope you enjoy your new weblog.
 	$ret['ldapServerOU']		= get_site_option('ldapServerOU');
 	$ret['ldapServerCN']		= get_site_option('ldapServerCN');
 	$ret['ldapEnableSSL']		= get_site_option('ldapEnableSSL');
-	$ret['ldapServerPass']		= get_site_option('ldapServerPass');
+	$ret['ldapServerPass']		= wpmuLdapGetServerPass();
 	$ret['ldapDisableSignup']	= get_site_option('ldapDisableSignup');
 	$ret['ldapLocalEmail']		= get_site_option('ldapLocalEmail');
 	$ret['ldapLocalEmailSubj']	= get_site_option('ldapLocalEmailSubj',$defaultLocalEmailSubj);
@@ -991,7 +1113,7 @@ function wpmuSetupLdapOptions() {
         $options[] = get_site_option("ldapServerAddr");
         $options[] = get_site_option("ldapServerOU");
         $options[] = get_site_option("ldapServerCN");
-        $options[] = get_site_option("ldapServerPass");
+        $options[] = wpmuLdapGetServerPass();
         $options[] = get_site_option("ldapServerPort");
         $options[] = get_site_option("ldapEnableSSL");
         return $options;

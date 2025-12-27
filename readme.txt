@@ -62,6 +62,8 @@ If you currently have the WPMU Ldap Authentication plugin configured, migration 
 * SECURITY: Harden option handling with nonce checks and output escaping to mitigate CSRF and stored XSS in admin pages.
 * SECURITY: Escape LDAP inputs and rely on trusted headers for SSO logins to reduce injection and impersonation risks.
 * FIXED: Replace deprecated WordPress helpers and validate sanitized LDAP usernames and emails during account creation.
+* SECURITY: Store the LDAP bind password encrypted instead of plaintext and add a decryption failure notice with guidance to re-save settings.
+* SECURITY: Allow setting a dedicated `WPMU_LDAP_ENCRYPTION_SALT` in `wp-config.php` to control plugin encryption.
 
 **5.0.1**
 
