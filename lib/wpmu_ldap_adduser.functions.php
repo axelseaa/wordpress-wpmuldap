@@ -15,7 +15,7 @@ function ldap_addmenuuser() {
 		$ldapBulkAdd = get_site_option('ldapBulkAdd');
 		if (is_super_admin() || 
 			($ldapAddUser == 'enabled' || empty($ldapAddUser)) ||
-			($ldapBulkAdd && is_admin($current_user->username))) {
+			($ldapBulkAdd && current_user_can('add_users'))) {
 		        add_submenu_page('users.php',__('LDAP Add User','wpmuldap'),__('Add User','wpmuldap'),'manage_options',basename(__FILE__),'ldapAddUserOptions');
 		}
         }
