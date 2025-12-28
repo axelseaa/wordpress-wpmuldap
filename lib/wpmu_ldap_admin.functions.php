@@ -207,7 +207,7 @@ function wpmuProcessUpdates() {
                 check_admin_referer('wpmu_ldap_save_options');
 
                 foreach ($_POST as $key => $item) {
-                        if (in_array($key, array('ldapOptionsSave', 'ldapTestConnection', '_wpnonce', '_wp_http_referer'), true)) {
+                        if (in_array($key, array('ldapOptionsSave', 'ldapTestConnection', 'ldapServerPass', 'ldapServerPassClear', '_wpnonce', '_wp_http_referer'), true)) {
                                 continue;
                         }
 
@@ -218,7 +218,14 @@ function wpmuProcessUpdates() {
                         update_site_option($key, wpmuLdapSanitizeOption($key, $item));
                 }
 
-                if (isset($_POST['ldapServerPass'])) {
+                $clearServerPass = isset($_POST['ldapServerPassClear']) && $_POST['ldapServerPassClear'] === '1';
+                $submittedServerPass = isset($_POST['ldapServerPass']) ? sanitize_text_field($_POST['ldapServerPass']) : '';
+
+                if ($clearServerPass) {
+                        delete_site_option('ldapServerPass');
+                        delete_site_option('ldapServerPassNeedsResave');
+                } elseif ($submittedServerPass !== '') {
+                        update_site_option('ldapServerPass', wpmuLdapMaybeEncryptPassword($submittedServerPass));
                         delete_site_option('ldapServerPassNeedsResave');
                 }
 
@@ -600,6 +607,8 @@ function ldapOptionsPanelConnection() {
 	if (!is_numeric($ldapServerPort))
 		$ldapServerPort = 389;
 
+	$hasServerPass = !empty($ldapServerPass);
+
 ?>
 	<p>
 	To start allowing users to log in with LDAP credentials, you will need to
@@ -609,7 +618,9 @@ function ldapOptionsPanelConnection() {
 	</p>
         <?php if (!defined('WPMU_LDAP_ENCRYPTION_SALT') || WPMU_LDAP_ENCRYPTION_SALT === '') { ?>
                 <div class="notice notice-info inline">
-                        <p><?php _e('LDAP bind password encryption is currently using the default WordPress salt. For stability across salt rotations, define <code>WPMU_LDAP_ENCRYPTION_SALT</code> in <code>wp-config.php</code>.'); ?></p>
+                        <p><?php _e('LDAP bind password encryption is currently using the default WordPress salt.'); ?></p>
+                        <p><?php _e('Your “Search User Password” is encrypted before it is saved and is stored encrypted at rest in the database (it is not stored as plain text).'); ?></p>
+                        <p><?php _e('By default, the plugin derives its encryption key from WordPress’s salts/keys. If those values are changed (for example, during security hardening or incident response), the plugin may be unable to decrypt previously stored passwords. To avoid this, define <code>WPMU_LDAP_ENCRYPTION_SALT</code> in <code>wp-config.php</code> to provide a stable encryption key.'); ?></p>
                 </div>
         <?php } ?>
 
@@ -671,9 +682,25 @@ function ldapOptionsPanelConnection() {
 			<tr valign="top">
 			   <th scope="row"><label for='serverPass'>Search User Password:</label></th>
 			   <td>
-                                <input type='password' name='ldapServerPass' id='serverPass' value='<?php echo esc_attr($ldapServerPass); ?>' />
+                                <input type='password' name='ldapServerPass' id='serverPass' value='' autocomplete='new-password' />
 				<br/>
-				Password for the User DN above.
+				Password for the User DN above. Leave blank to keep the existing password.
+				<?php if ($hasServerPass) { ?>
+					<br/>
+					<strong>Saved password is set.</strong>
+					<label for="ldapServerPassClear">
+						<input type="checkbox" name="ldapServerPassClear" id="ldapServerPassClear" value="1" />
+						Clear saved password
+					</label>
+				<?php } ?>
+			   </td>
+			</tr>
+			<tr valign="top">
+			   <th scope="row">Password Security &amp; Encryption</th>
+			   <td>
+				Your &ldquo;Search User Password&rdquo; is encrypted before it is saved and is stored encrypted at rest in the database (it is not stored as plain text).
+				<br/><br/>
+				By default, the plugin derives its encryption key from WordPress&rsquo;s salts/keys. If those values are changed (for example, during security hardening or incident response), the plugin may be unable to decrypt previously stored passwords. To avoid this, define <code>WPMU_LDAP_ENCRYPTION_SALT</code> in <code>wp-config.php</code> to provide a stable encryption key.
 			   </td>
 			</tr>
 			<tr valign="top">
@@ -686,8 +713,8 @@ function ldapOptionsPanelConnection() {
 			<tr valign="top">
 			   <th scope="row">Test Connection:</th>
 			   <td>
-				<input type='radio' name='ldapTestConnection' id='testconnectionyes' value='1'> <label for="textconnectionyes">Yes</label>
-				<input type='radio' name='ldapTestConnection' checked='checked' id='testconnectionno' value='0'> <label for="textconnectionno">No</label>
+				<input type='radio' name='ldapTestConnection' id='testconnectionyes' value='1'> <label for="testconnectionyes">Yes</label>
+				<input type='radio' name='ldapTestConnection' checked='checked' id='testconnectionno' value='0'> <label for="testconnectionno">No</label>
 				<br/>
 				Specifys whether or not to test the ldap server connection on form submit.
 			   </td>
@@ -858,7 +885,7 @@ function ldapOptionsPanelGroup() {
 		full dn to each group.  For multiple groups, enter each group on a new line.  Nested groups are supported.</p>
                 <table class="form-table">
                         <tr valign="top">
-                           <th scope="row"><label for="ldap">Allow Login:</label></th>
+                           <th scope="row"><label for="ldapGroupAllowLogin">Allow Login:</label></th>
                            <td>
                                 <textarea rows="2" cols="70" name="ldapGroupAllowLogin" id="ldapGroupAllowLogin"><?php echo esc_textarea($ldapGroupAllowLogin); ?></textarea>
                                 <br/>
@@ -872,7 +899,7 @@ function ldapOptionsPanelGroup() {
                            </td>
                         </tr>-->
                         <tr valign="top">
-                           <th scope="row"><label for="ldap">Deny Login:</label></th>
+                           <th scope="row"><label for="ldapGroupDenyLogin">Deny Login:</label></th>
                            <td>
                                 <textarea rows="2" cols="70" name="ldapGroupDenyLogin" id="ldapGroupDenyLogin"><?php echo esc_textarea($ldapGroupDenyLogin); ?></textarea>
                                 <br/>
