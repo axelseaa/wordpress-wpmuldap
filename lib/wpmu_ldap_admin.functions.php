@@ -58,6 +58,10 @@ function wpmuLdapEncryptPassword($password, $salt_override = null) {
 }
 
 function wpmuLdapDecryptPassword($value) {
+        return wpmuLdapDecryptPasswordWithSalt($value, wpmuLdapGetEncryptionSalt());
+}
+
+function wpmuLdapDecryptPasswordWithSalt($value, $salt) {
         if (!wpmuLdapIsEncryptedPassword($value)) {
                 return $value;
         }
@@ -80,7 +84,7 @@ function wpmuLdapDecryptPassword($value) {
                 return '';
         }
 
-        $key = hash('sha256', wpmuLdapGetEncryptionSalt(), true);
+        $key = hash('sha256', $salt, true);
         $decrypted = openssl_decrypt($encrypted, $cipher, $key, OPENSSL_RAW_DATA, $iv);
 
         return $decrypted === false ? '' : $decrypted;
@@ -105,12 +109,21 @@ function wpmuLdapGetServerPass() {
         }
 
         $decrypted = wpmuLdapDecryptPassword($stored);
-        if ($decrypted === '') {
-                update_site_option('ldapServerPassNeedsResave', 'true');
+        if ($decrypted !== '') {
+                delete_site_option('ldapServerPassNeedsResave');
                 return $decrypted;
         }
 
-        delete_site_option('ldapServerPassNeedsResave');
+        if (defined('WPMU_LDAP_ENCRYPTION_SALT') && WPMU_LDAP_ENCRYPTION_SALT !== '') {
+                $legacy_decrypted = wpmuLdapDecryptPasswordWithSalt($stored, wp_salt('auth'));
+                if ($legacy_decrypted !== '') {
+                        update_site_option('ldapServerPass', wpmuLdapEncryptPassword($legacy_decrypted));
+                        delete_site_option('ldapServerPassNeedsResave');
+                        return $legacy_decrypted;
+                }
+        }
+
+        update_site_option('ldapServerPassNeedsResave', 'true');
 
         return $decrypted;
 }
@@ -714,22 +727,19 @@ function ldapOptionsPanelConnection() {
 				<?php } ?>
 			   </td>
 			</tr>
-                        <?php if (!defined('WPMU_LDAP_ENCRYPTION_SALT') || WPMU_LDAP_ENCRYPTION_SALT === '') { ?>
-                                <tr valign="top">
-                                   <th scope="row">Encryption Salt</th>
-                                   <td>
-                                        <p><?php _e('Generate a stable encryption salt to keep LDAP bind passwords decryptable even if WordPress salts rotate.'); ?></p>
-                                        <input type="submit" class="button" name="ldapGenerateEncryptionSalt" value="Generate Encryption Salt" />
-                                        <p class="description"><?php _e('The generated value should be added to <code>wp-config.php</code>.'); ?></p>
-                                   </td>
-                                </tr>
-                        <?php } ?>
 			<tr valign="top">
 			   <th scope="row">Password Security &amp; Encryption</th>
 			   <td>
 				Your &ldquo;Search User Password&rdquo; is encrypted before it is saved and is stored encrypted at rest in the database (it is not stored as plain text).
 				<br/><br/>
 				By default, the plugin derives its encryption key from WordPress&rsquo;s salts/keys. If those values are changed (for example, during security hardening or incident response), the plugin may be unable to decrypt previously stored passwords. To avoid this, define <code>WPMU_LDAP_ENCRYPTION_SALT</code> in <code>wp-config.php</code> to provide a stable encryption key.
+                                <?php if (!defined('WPMU_LDAP_ENCRYPTION_SALT') || WPMU_LDAP_ENCRYPTION_SALT === '') { ?>
+                                        <br/><br/>
+                                        <?php _e('Generate a stable encryption salt to keep LDAP bind passwords decryptable even if WordPress salts rotate.'); ?>
+                                        <br/>
+                                        <input type="submit" class="button" name="ldapGenerateEncryptionSalt" value="Generate Encryption Salt" />
+                                        <p class="description"><?php _e('The generated value should be added to <code>wp-config.php</code>.'); ?></p>
+                                <?php } ?>
 			   </td>
 			</tr>
 			<tr valign="top">
