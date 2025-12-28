@@ -609,7 +609,9 @@ function ldapOptionsPanelConnection() {
 	</p>
         <?php if (!defined('WPMU_LDAP_ENCRYPTION_SALT') || WPMU_LDAP_ENCRYPTION_SALT === '') { ?>
                 <div class="notice notice-info inline">
-                        <p><?php _e('LDAP bind password encryption is currently using the default WordPress salt. For stability across salt rotations, define <code>WPMU_LDAP_ENCRYPTION_SALT</code> in <code>wp-config.php</code>.'); ?></p>
+                        <p><?php _e('LDAP bind password encryption is currently using the default WordPress salt.'); ?></p>
+                        <p><?php _e('Your “Search User Password” is encrypted before it is saved and is stored encrypted at rest in the database (it is not stored as plain text).'); ?></p>
+                        <p><?php _e('By default, the plugin derives its encryption key from WordPress’s salts/keys. If those values are changed (for example, during security hardening or incident response), the plugin may be unable to decrypt previously stored passwords. To avoid this, define <code>WPMU_LDAP_ENCRYPTION_SALT</code> in <code>wp-config.php</code> to provide a stable encryption key.'); ?></p>
                 </div>
         <?php } ?>
 
