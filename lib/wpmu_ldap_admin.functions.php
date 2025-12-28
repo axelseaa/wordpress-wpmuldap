@@ -677,6 +677,14 @@ function ldapOptionsPanelConnection() {
 			   </td>
 			</tr>
 			<tr valign="top">
+			   <th scope="row">Password Security &amp; Encryption</th>
+			   <td>
+				Your &ldquo;Search User Password&rdquo; is encrypted before it is saved and is stored encrypted at rest in the database (it is not stored as plain text).
+				<br/><br/>
+				By default, the plugin derives its encryption key from WordPress&rsquo;s salts/keys. If those values are changed (for example, during security hardening or incident response), the plugin may be unable to decrypt previously stored passwords. To avoid this, define <code>WPMU_LDAP_ENCRYPTION_SALT</code> in <code>wp-config.php</code> to provide a stable encryption key.
+			   </td>
+			</tr>
+			<tr valign="top">
 			   <th scope="row">LDAP Type:</th>
 			   <td>
 				<input type='radio' name='ldapLinuxWindows' id='linux' value='1' <?php echo $tLinWin; ?>/> <label for="linux">Linux</label>
@@ -686,8 +694,8 @@ function ldapOptionsPanelConnection() {
 			<tr valign="top">
 			   <th scope="row">Test Connection:</th>
 			   <td>
-				<input type='radio' name='ldapTestConnection' id='testconnectionyes' value='1'> <label for="textconnectionyes">Yes</label>
-				<input type='radio' name='ldapTestConnection' checked='checked' id='testconnectionno' value='0'> <label for="textconnectionno">No</label>
+				<input type='radio' name='ldapTestConnection' id='testconnectionyes' value='1'> <label for="testconnectionyes">Yes</label>
+				<input type='radio' name='ldapTestConnection' checked='checked' id='testconnectionno' value='0'> <label for="testconnectionno">No</label>
 				<br/>
 				Specifys whether or not to test the ldap server connection on form submit.
 			   </td>
@@ -858,7 +866,7 @@ function ldapOptionsPanelGroup() {
 		full dn to each group.  For multiple groups, enter each group on a new line.  Nested groups are supported.</p>
                 <table class="form-table">
                         <tr valign="top">
-                           <th scope="row"><label for="ldap">Allow Login:</label></th>
+                           <th scope="row"><label for="ldapGroupAllowLogin">Allow Login:</label></th>
                            <td>
                                 <textarea rows="2" cols="70" name="ldapGroupAllowLogin" id="ldapGroupAllowLogin"><?php echo esc_textarea($ldapGroupAllowLogin); ?></textarea>
                                 <br/>
@@ -872,7 +880,7 @@ function ldapOptionsPanelGroup() {
                            </td>
                         </tr>-->
                         <tr valign="top">
-                           <th scope="row"><label for="ldap">Deny Login:</label></th>
+                           <th scope="row"><label for="ldapGroupDenyLogin">Deny Login:</label></th>
                            <td>
                                 <textarea rows="2" cols="70" name="ldapGroupDenyLogin" id="ldapGroupDenyLogin"><?php echo esc_textarea($ldapGroupDenyLogin); ?></textarea>
                                 <br/>
