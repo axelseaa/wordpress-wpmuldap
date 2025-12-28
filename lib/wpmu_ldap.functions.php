@@ -321,6 +321,7 @@ function wpmuLdapAddUserToBlog($user_id,$blog_id,$new_role = 'subscriber') {
  */
 function wpmuLdapDisableSignup() {
         wp_redirect(get_option('siteurl').'/wp-login.php?action=signupdisabled');
+	exit;
 
 	$msg = stripslashes(get_site_option('ldapSignupMessage'));
 }
@@ -486,4 +487,3 @@ function wpmuLdap_custom_admin_bar_render() {
 			'title' => _x( 'User', 'add new from admin bar' ), 'new-user' ),
 		));
 }
-
