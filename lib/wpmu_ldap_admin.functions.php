@@ -207,7 +207,7 @@ function wpmuProcessUpdates() {
                 check_admin_referer('wpmu_ldap_save_options');
 
                 foreach ($_POST as $key => $item) {
-                        if (in_array($key, array('ldapOptionsSave', 'ldapTestConnection', '_wpnonce', '_wp_http_referer'), true)) {
+                        if (in_array($key, array('ldapOptionsSave', 'ldapTestConnection', 'ldapServerPass', 'ldapServerPassClear', '_wpnonce', '_wp_http_referer'), true)) {
                                 continue;
                         }
 
@@ -218,7 +218,14 @@ function wpmuProcessUpdates() {
                         update_site_option($key, wpmuLdapSanitizeOption($key, $item));
                 }
 
-                if (isset($_POST['ldapServerPass'])) {
+                $clearServerPass = isset($_POST['ldapServerPassClear']) && $_POST['ldapServerPassClear'] === '1';
+                $submittedServerPass = isset($_POST['ldapServerPass']) ? sanitize_text_field($_POST['ldapServerPass']) : '';
+
+                if ($clearServerPass) {
+                        delete_site_option('ldapServerPass');
+                        delete_site_option('ldapServerPassNeedsResave');
+                } elseif ($submittedServerPass !== '') {
+                        update_site_option('ldapServerPass', wpmuLdapMaybeEncryptPassword($submittedServerPass));
                         delete_site_option('ldapServerPassNeedsResave');
                 }
 
@@ -600,6 +607,8 @@ function ldapOptionsPanelConnection() {
 	if (!is_numeric($ldapServerPort))
 		$ldapServerPort = 389;
 
+	$hasServerPass = !empty($ldapServerPass);
+
 ?>
 	<p>
 	To start allowing users to log in with LDAP credentials, you will need to
@@ -673,9 +682,17 @@ function ldapOptionsPanelConnection() {
 			<tr valign="top">
 			   <th scope="row"><label for='serverPass'>Search User Password:</label></th>
 			   <td>
-                                <input type='password' name='ldapServerPass' id='serverPass' value='<?php echo esc_attr($ldapServerPass); ?>' />
+                                <input type='password' name='ldapServerPass' id='serverPass' value='' autocomplete='new-password' />
 				<br/>
-				Password for the User DN above.
+				Password for the User DN above. Leave blank to keep the existing password.
+				<?php if ($hasServerPass) { ?>
+					<br/>
+					<strong>Saved password is set.</strong>
+					<label for="ldapServerPassClear">
+						<input type="checkbox" name="ldapServerPassClear" id="ldapServerPassClear" value="1" />
+						Clear saved password
+					</label>
+				<?php } ?>
 			   </td>
 			</tr>
 			<tr valign="top">
