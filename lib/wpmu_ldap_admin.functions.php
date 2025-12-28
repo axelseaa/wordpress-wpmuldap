@@ -203,6 +203,25 @@ function wpmuLdapOptionsMenu($tab) {
 }
 
 function wpmuProcessUpdates() {
+        if (isset($_POST['ldapGenerateEncryptionSalt'])) {
+                check_admin_referer('wpmu_ldap_save_options');
+
+                if (defined('WPMU_LDAP_ENCRYPTION_SALT') && WPMU_LDAP_ENCRYPTION_SALT !== '') {
+                        $message = __('<strong>WPMU_LDAP_ENCRYPTION_SALT is already defined.</strong> Remove it from <code>wp-config.php</code> before generating a new one.'); 
+                        echo "<div id='message' class='notice notice-warning'><p>{$message}</p></div>";
+                        return;
+                }
+
+                $salt = wp_generate_password(64, true, true);
+                $snippet = sprintf("define('WPMU_LDAP_ENCRYPTION_SALT', '%s');", $salt);
+                $message = sprintf(
+                        __('<strong>Encryption salt generated.</strong> Add this line to <code>wp-config.php</code>: <code>%s</code>'),
+                        esc_html($snippet)
+                );
+                echo "<div id='message' class='notice notice-success'><p>{$message}</p></div>";
+                return;
+        }
+
         if (isset($_POST['ldapOptionsSave'])) {
                 check_admin_referer('wpmu_ldap_save_options');
 
@@ -695,6 +714,16 @@ function ldapOptionsPanelConnection() {
 				<?php } ?>
 			   </td>
 			</tr>
+                        <?php if (!defined('WPMU_LDAP_ENCRYPTION_SALT') || WPMU_LDAP_ENCRYPTION_SALT === '') { ?>
+                                <tr valign="top">
+                                   <th scope="row">Encryption Salt</th>
+                                   <td>
+                                        <p><?php _e('Generate a stable encryption salt to keep LDAP bind passwords decryptable even if WordPress salts rotate.'); ?></p>
+                                        <input type="submit" class="button" name="ldapGenerateEncryptionSalt" value="Generate Encryption Salt" />
+                                        <p class="description"><?php _e('The generated value should be added to <code>wp-config.php</code>.'); ?></p>
+                                   </td>
+                                </tr>
+                        <?php } ?>
 			<tr valign="top">
 			   <th scope="row">Password Security &amp; Encryption</th>
 			   <td>
