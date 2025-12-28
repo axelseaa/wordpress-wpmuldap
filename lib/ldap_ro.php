@@ -189,7 +189,7 @@ class LDAP_ro extends LDAP {
 		for ($c=0; $c < $no_of_members; $c++) {
 			// Get the user ID from the DN (cn= part)
 			$parts = $this->GetDNParts ($data[LDAP_INDEX_UNIQUE_MEMBER][$c]);
-			$parts = split ("=", $parts[0]);
+			$parts = explode ("=", $parts[0]);
 			
 			if ($parts[1] != "") {
 				$this->GetUserInfo ($parts[1], $user_data);
